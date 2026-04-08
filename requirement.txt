@@ -1,6 +1,5 @@
 opencv-python-headless
 mediapipe
 ultralytics
-pyttsx3
 streamlit
 pandas

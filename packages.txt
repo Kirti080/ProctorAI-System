@@ -1,3 +1,3 @@
-libgl1
-freeglut3
-libespeak1
+libgl1-mesa-dev
+libglib2.0-0
+libespeak-ng1
