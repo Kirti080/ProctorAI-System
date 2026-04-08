@@ -7,6 +7,11 @@ import pyttsx3
 import threading
 from datetime import datetime
 import pandas as pd
+import os  # ADDED for environment check
+
+# --- ENVIRONMENT CHECK ---
+# Detects if running on Streamlit Cloud to prevent audio driver crashes
+IS_CLOUD = os.getenv('STREAMLIT_RUNTIME_ENV') == 'cloud'
 
 # --- UI CONFIGURATION ---
 st.set_page_config(page_title="ProctorAI Pro", layout="wide", page_icon="🛡️")
@@ -27,7 +32,8 @@ class ProctorVoice:
         self.last_alert_time = 0
         self.cooldown = 4 
     def say(self, text):
-        if time.time() - self.last_alert_time > self.cooldown:
+        # Only attempt to speak if NOT on Streamlit Cloud
+        if not IS_CLOUD and (time.time() - self.last_alert_time > self.cooldown):
             threading.Thread(target=self._speak, args=(text,), daemon=True).start()
             self.last_alert_time = time.time()
     def _speak(self, text):
@@ -36,7 +42,8 @@ class ProctorVoice:
             local_engine.say(text)
             local_engine.runAndWait()
             local_engine.stop()
-        except: pass
+        except: 
+            pass
 
 if 'voice' not in st.session_state: st.session_state.voice = ProctorVoice()
 if 'stats' not in st.session_state: 
@@ -55,7 +62,6 @@ with t1:
 with t2:
     run_proctoring = st.toggle("SYSTEM ACTIVE", value=False, key="active_toggle")
 
-# ADDED STUDENT PORTAL TAB
 tab_monitor, tab_student, tab_analytics = st.tabs(["🔴 LIVE MONITOR", "👨‍🎓 STUDENT PORTAL", "📊 ANALYTICS & REPORTS"])
 
 # --- LIVE MONITOR TAB ---
@@ -74,7 +80,7 @@ with tab_monitor:
         status_indicator = st.empty()
         blink_timer_view = st.empty()
 
-# --- STUDENT PORTAL TAB (NEW) ---
+# --- STUDENT PORTAL TAB ---
 with tab_student:
     st.header("Mock Examination: Computer Science 101")
     with st.container():
@@ -82,39 +88,31 @@ with tab_student:
         st.write("### Question 1")
         st.write("What is the primary purpose of a Virtual Environment in Python?")
         st.radio("Select an answer:", ["To make code run faster", "To isolate project dependencies", "To connect to the internet", "To edit images"], key="q1")
-        
         st.write("### Question 2")
         st.write("Which AI model is used in this project for Object Detection?")
         st.selectbox("Select an answer:", ["ResNet", "YOLOv8", "VGG16", "MobileNet"], key="q2")
-        
         st.button("Submit Exam", type="primary")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- ANALYTICS & REPORTS TAB (UPDATED) ---
+# --- ANALYTICS & REPORTS TAB ---
 with tab_analytics:
     st.header("Exam Integrity Report")
     df = pd.DataFrame(list(st.session_state.stats.items()), columns=['Violation', 'Count'])
-    
     col_chart, col_download = st.columns([2, 1])
     with col_chart:
         if any(st.session_state.stats.values()):
             st.bar_chart(df.set_index('Violation'))
         else:
             st.info("No data collected yet.")
-            
     with col_download:
         st.write("### Export Data")
-        st.write("Generate a CSV file of all alerts for university records.")
-        # THE REPORT GENERATOR
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Download Exam Report",
             data=csv,
             file_name=f"Exam_Report_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime='text/csv',
-            help="Click to download a CSV summary of all proctoring violations."
+            mime='text/csv'
         )
-        st.write("---")
         st.table(df)
 
 # --- THE AI ENGINE ---
@@ -174,7 +172,7 @@ if run_proctoring:
         video_placeholder.image(final_frame, use_container_width=True)
         met1.metric("PHONE DETECTION", st.session_state.stats["Phone"])
         met2.metric("GAZE ALERTS", st.session_state.stats["Distracted"])
-        met3.metric("LIVENESS STATUS", "SECURE" if time_since_blink < 10 else "FAIL")
+        met3.metric("LIVENESS STATUS", "SECURE" if (time.time() - last_blink) < 10 else "FAIL")
         met4.metric("PENDING REQ.", st.session_state.stats["Requests"])
         log_view.code("\n".join(st.session_state.logs[:8]))
 
